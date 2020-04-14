@@ -6,8 +6,8 @@
  * Date created: April 14, 2020
  * Date modified: 
  *
- * Student names: FIXME
- * Date: FIXME
+ * Student names: Hoang Pham and Nicholas Syrylo
+ * Date: 4/26/20
  *
  * */
 
