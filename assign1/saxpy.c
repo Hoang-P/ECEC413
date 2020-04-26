@@ -23,9 +23,9 @@ typedef struct args_for_thread_t {
     int tid;                          /* The thread ID */
     int num_threads;                  /* Number of worker threads */
     int num_elements;                 /* Number of elements in the vectors */
-    float *x;                          /* Starting point of integral */
-    float *y;                          /* Ending point of integral */
-    float a;                          /* Base of trapezoid */
+    float *x;                         /* Pointer to x vector */
+    float *y;                         /* Pointer to y vector */
+    float a;                          /* a float */
     int offset;                       /* Starting offset for thread within the vectors */
     int chunk_size;                   /* Chunk size */
 } ARGS_FOR_THREAD;
@@ -195,8 +195,6 @@ void compute_using_pthreads_v2(float *x, float *y, float a, int num_elements, in
         args_for_thread[i]->x = x;
         args_for_thread[i]->y = y;
         args_for_thread[i]->a = a;
-        // args_for_thread[i]->offset = i * chunk_size;
-        // args_for_thread[i]->chunk_size = chunk_size;
         pthread_create (&tid[i], &attributes, saxpy_v2, (void *) args_for_thread[i]);
     }
         
@@ -219,7 +217,7 @@ saxpy_v1 (void *args)
         for (int i = args_for_me->offset; i < (args_for_me->offset + args_for_me->chunk_size); i++)
             args_for_me->y[i] = args_for_me->a * args_for_me->x[i] + args_for_me->y[i];
     }
-    else
+    else /* Handle the last thread in case the chunk size is smaller/larger than the number of remaining elements */
     {
         for (int i = args_for_me->offset; i < args_for_me->num_elements; i++)
             args_for_me->y[i] = args_for_me->a * args_for_me->x[i] + args_for_me->y[i];
@@ -232,15 +230,8 @@ saxpy_v2 (void *args)
 {
     ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *) args; /* Typecast the argument to a pointer the the ARGS_FOR_THREAD structure */
 
-    for (int i = (args_for_me->tid); i < (args_for_me->num_elements); i += args_for_me->num_threads)
+    for (int i = (args_for_me->tid); i < (args_for_me->num_elements); i += args_for_me->num_threads) /* Increment by number of threads for striding */
         args_for_me->y[i] = args_for_me->a * args_for_me->x[i] + args_for_me->y[i];
-    // int stride = args_for_me->num_threads;
-    // int tid = args_for_me->tid;
-    // while (tid < args_for_me->num_elements) {
-    //     args_for_me->y[tid] = args_for_me->a * args_for_me->x[tid] + args_for_me->y[tid];
-    //     tid = tid + stride;
-    // }
-
 
     pthread_exit ((void *)0);
 }
