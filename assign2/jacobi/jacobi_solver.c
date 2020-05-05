@@ -39,7 +39,7 @@ typedef struct args_for_thread_t {
 
 int main(int argc, char **argv) 
 {
-	if (argc < 2) {
+	if (argc != 2) {
 		fprintf(stderr, "Usage: %s matrix-size\n", argv[0]);
         fprintf(stderr, "matrix-size: width of the square matrix\n");
 		exit(EXIT_FAILURE);
@@ -189,22 +189,16 @@ void * jacobi (void *args)
         int i, j;
         for (i = args_for_me->tid; i < args_for_me->rows; i += args_for_me->num_threads)
         {
-            if (pingpong)
-                sum = -args_for_me->A.elements[i * args_for_me->columns + i] * args_for_me->x1.elements[i];
-            else
-                sum = -args_for_me->A.elements[i * args_for_me->columns + i] * args_for_me->x2.elements[i];
+            (pingpong) ? (sum = -args_for_me->A.elements[i * args_for_me->columns + i] * args_for_me->x1.elements[i]) : \
+                        (sum = -args_for_me->A.elements[i * args_for_me->columns + i] * args_for_me->x2.elements[i]);
             
             for (j = 0; j < args_for_me->columns; j++) {
-                if (pingpong)
-                    sum += args_for_me->A.elements[i * args_for_me->columns + j] * args_for_me->x1.elements[j];
-                else
-                    sum += args_for_me->A.elements[i * args_for_me->columns + j] * args_for_me->x2.elements[j];
+                (pingpong) ? (sum += args_for_me->A.elements[i * args_for_me->columns + j] * args_for_me->x1.elements[j]) : \
+                            (sum += args_for_me->A.elements[i * args_for_me->columns + j] * args_for_me->x2.elements[j]);
             }
 
-            if (pingpong)
-                args_for_me->x2.elements[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i];
-            else
-                args_for_me->x1.elements[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i];
+            (pingpong) ? (args_for_me->x2.elements[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i]) : \
+                        (args_for_me->x1.elements[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i]);
         }
 
         for (i = args_for_me->tid; i < args_for_me->rows; i += args_for_me->num_threads)
