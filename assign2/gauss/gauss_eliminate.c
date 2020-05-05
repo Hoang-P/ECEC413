@@ -32,10 +32,7 @@ typedef struct args_for_thread_t {
     int rows;
     int columns;
     float *elements;
-    int offset;                       /* Starting offset for thread within the vectors */
-    int chunk_size;                   /* Chunk size */
     pthread_barrier_t *barrier;
-    pthread_barrier_t *barrier2;
 } ARGS_FOR_THREAD;
 
 /* Function prototypes */
@@ -170,12 +167,9 @@ void gauss_eliminate_using_pthreads(Matrix U, int num_threads)
     int i;
     ARGS_FOR_THREAD **args_for_thread;
     args_for_thread = malloc (sizeof (ARGS_FOR_THREAD) * num_threads);
-    int chunk_size = (int) floor ((float) U.num_rows/(float) num_threads); // Compute the chunk size
 
     pthread_barrier_t *barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t *));
     pthread_barrier_init(barrier,NULL,num_threads);
-    pthread_barrier_t *barrier2 = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t *));
-    pthread_barrier_init(barrier2,NULL,num_threads);
 
     for (i = 0; i < num_threads; i++){
         args_for_thread[i] = (ARGS_FOR_THREAD *) malloc (sizeof (ARGS_FOR_THREAD));
@@ -184,10 +178,7 @@ void gauss_eliminate_using_pthreads(Matrix U, int num_threads)
         args_for_thread[i]->rows = U.num_rows;
         args_for_thread[i]->columns = U.num_columns;
         args_for_thread[i]->elements = U.elements;
-        args_for_thread[i]->offset = i * chunk_size;
-        args_for_thread[i]->chunk_size = chunk_size;
         args_for_thread[i]->barrier = barrier;
-        args_for_thread[i]->barrier2 = barrier2;
         pthread_create (&tid[i], &attributes, gauss, (void *) args_for_thread[i]);
     }
 					 
@@ -227,10 +218,9 @@ void *gauss (void *args)
                     args_for_me->elements[num_elements * i + j] -= (args_for_me->elements[num_elements * i + k] * args_for_me->elements[num_elements * k + j]);	/* Elimination step */
             
                 args_for_me->elements[num_elements * i + k] = 0;
-                // printf("%i\n", num_elements);
             }
         }
-        pthread_barrier_wait(args_for_me->barrier2);
+        pthread_barrier_wait(args_for_me->barrier);
     }
 
     if (args_for_me->tid == (args_for_me->num_threads - 1))
@@ -243,20 +233,6 @@ void *gauss (void *args)
 int check_results(float *A, float *B, int size, float tolerance)
 {
     int i;
-    // for (i = 0; i < sqrt(size); i++)
-    // {
-    //     for (int j = 0; j < sqrt(size); j++)
-    //         printf("%f ", A[(int)sqrt(size)*i + j]);
-    //     printf("\n");
-    // }
-    // printf("\n");
-    // for (i = 0; i < sqrt(size); i++)
-    // {
-    //     for (int j = 0; j < sqrt(size); j++)
-    //         printf("%f ", B[(int)sqrt(size)*i + j]);
-    //     printf("\n");
-    // }
-
     for (i = 0; i < size; i++)
         if(fabsf(A[i] - B[i]) > tolerance)
             return -1;
