@@ -23,15 +23,16 @@
 typedef struct args_for_thread_t {
     int tid;                          /* The thread ID */
     int num_threads;                  /* Number of worker threads */
-    // int num_elements;                 /* Number of elements in the vectors */
-    int rows;                         /* Number of elements in the vectors */
-    int columns;                      /* Number of elements in the vectors */
-    matrix_t A;                       /* Grid */
-    matrix_t B;                       /* Grid */
-    matrix_t x1;                      /* Grid */
-    matrix_t x2;                      /* Grid */
-    pthread_barrier_t *barrier;
-    double *global_diff;
+    int rows;                         /* Number of rows in the vectors */
+    int columns;                      /* Number of columns in the vectors */
+    matrix_t A;                       /* Matrix A */
+    matrix_t B;                       /* Matrix B */
+    matrix_t x1;                      /* Matrix x (ping) */
+    matrix_t x2;                      /* Matrix x (pong) */
+    int num_iter;                     /* Iteration counter */
+    pthread_barrier_t *barrier;       /* Barrier */
+    double *diff;                     /* Partial diff array (ping) */
+    double *diff2;                    /* Partial diff array (pong) */
 } ARGS_FOR_THREAD;
 
 /* Uncomment the line below to spit out debug information */ 
@@ -137,8 +138,15 @@ void compute_using_pthreads (const matrix_t A, matrix_t mt_sol_x, const matrix_t
     int i, j;
     pthread_barrier_t *barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t *));
     pthread_barrier_init(barrier,NULL,num_threads);
+
+    /* Create partial diff arrays for threads */
     double *diff = (double *) malloc (num_threads * sizeof (double));
     if (diff == NULL) {
+        perror ("Malloc");
+        return;
+    }
+    double *diff2 = (double *) malloc (num_threads * sizeof (double));
+    if (diff2 == NULL) {
         perror ("Malloc");
         return;
     }
@@ -159,13 +167,17 @@ void compute_using_pthreads (const matrix_t A, matrix_t mt_sol_x, const matrix_t
         args_for_thread[i]->B = B;
         args_for_thread[i]->x1 = mt_sol_x;
         args_for_thread[i]->x2 = new_x;
+        args_for_thread[i]->num_iter = 0;
         args_for_thread[i]->barrier = barrier;
-        args_for_thread[i]->global_diff = diff;
+        args_for_thread[i]->diff = diff;
+        args_for_thread[i]->diff2 = diff2;
         pthread_create (&tid[i], &attributes, jacobi, (void *) args_for_thread[i]);
     }
 
     for (i = 0; i < num_threads; i++)
         pthread_join (tid[i], NULL);
+
+    fprintf(stderr, "Convergence achieved after %d iterations\n", args_for_thread[0]->num_iter);
 
     /* Free data structures */
     for(j = 0; j < num_threads; j++)
@@ -175,48 +187,54 @@ void compute_using_pthreads (const matrix_t A, matrix_t mt_sol_x, const matrix_t
 void * jacobi (void *args) 
 {
     ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *) args; /* Typecast the argument to a pointer the the ARGS_FOR_THREAD structure */
-    int pingpong = 1;
 
     /* Perform Jacobi iteration. */
     int done = 0;
-    int num_iter = 0;
     double mse, sum, total;
+
+    /* Pingpong buffers (pointers) */
+    float * x1 = args_for_me->x1.elements;
+    float * x2 = args_for_me->x2.elements;
+
+    double * diff = args_for_me->diff;
+    double * diff2 = args_for_me->diff2;
 
     while (!done)
     {
+        diff[args_for_me->tid] = 0.0;
         total = 0.0;
-        args_for_me->global_diff[args_for_me->tid] = 0.0;
         int i, j;
         for (i = args_for_me->tid; i < args_for_me->rows; i += args_for_me->num_threads)
         {
-            (pingpong) ? (sum = -args_for_me->A.elements[i * args_for_me->columns + i] * args_for_me->x1.elements[i]) : \
-                        (sum = -args_for_me->A.elements[i * args_for_me->columns + i] * args_for_me->x2.elements[i]);
+            sum = -args_for_me->A.elements[i * args_for_me->columns + i] * x1[i];
             
-            for (j = 0; j < args_for_me->columns; j++) {
-                (pingpong) ? (sum += args_for_me->A.elements[i * args_for_me->columns + j] * args_for_me->x1.elements[j]) : \
-                            (sum += args_for_me->A.elements[i * args_for_me->columns + j] * args_for_me->x2.elements[j]);
-            }
+            for (j = 0; j < args_for_me->columns; j++) 
+                sum += args_for_me->A.elements[i * args_for_me->columns + j] * x1[j];
 
-            (pingpong) ? (args_for_me->x2.elements[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i]) : \
-                        (args_for_me->x1.elements[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i]);
+            x2[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i];
+            diff[args_for_me->tid] += (x2[i] - x1[i]) * (x2[i] - x1[i]);
         }
+        args_for_me->num_iter++;
 
-        for (i = args_for_me->tid; i < args_for_me->rows; i += args_for_me->num_threads)
-            args_for_me->global_diff[args_for_me->tid] += (args_for_me->x2.elements[i] - args_for_me->x1.elements[i]) * (args_for_me->x2.elements[i] - args_for_me->x1.elements[i]);
+        /* Swap buffers */
+        float * temp = x1;
+        x1 = x2;
+        x2 = temp;
+        
+        double * temp2 = diff;
+        diff = diff2;
+        diff2 = temp2;
 
         pthread_barrier_wait(args_for_me->barrier);
-        pingpong = !pingpong;
-        for(int i = 0; i < args_for_me->num_threads; i++)
-            total += args_for_me->global_diff[i];
-        num_iter++;
+
+        for(int i = 0; i < args_for_me->num_threads; i++) /* Accumulate total difference for mse */
+            total += diff2[i];
+        
         mse = sqrt(total); /* Mean squared error. */
+
         if (mse <= THRESHOLD)
             done = 1;
-        pthread_barrier_wait(args_for_me->barrier);
     }
-
-    if (args_for_me->tid == 0)
-        fprintf(stderr, "Convergence achieved after %d iterations\n", num_iter);
 
     pthread_exit ((void *)0);
 }
