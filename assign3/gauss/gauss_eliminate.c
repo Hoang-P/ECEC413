@@ -145,54 +145,42 @@ void gauss_eliminate_using_omp(Matrix U, int thread_count)
 
 #pragma omp parallel num_threads(thread_count) shared(U, num_elements) 
     {
-    int tid = omp_get_thread_num();
-    
-    
-    for (int k = 0; k < num_elements; k++) {
-        if ( (k % thread_count) == tid) {
-            for (int j = (k + 1); j < num_elements; j++) {
-                if (U.elements[num_elements * k + k] == 0) {
-                    fprintf(stderr, "Numerical instability. The principal diagonal element is zero.\n");
-                }
-
-                U.elements[num_elements * k + j] = (float)(U.elements[num_elements * k + j] / U.elements[num_elements * k + k]); 	/* Division step */
+        int tid = omp_get_thread_num();
         
-            }
-
-            U.elements[num_elements * k + k] = 1; /* Set the principal diagonal entry in U to 1 */
-        
-        }
-
-        #pragma omp barrier
-
-        for (int i = k + 1; i < num_elements; i++) {
-            if ( (i % thread_count) == tid) {
+        for (int k = 0; k < num_elements; k++) {
+            if ( (k % thread_count) == tid) {
                 for (int j = (k + 1); j < num_elements; j++) {
-                    U.elements[num_elements * i + j] -= (U.elements[num_elements * i + k] * U.elements[num_elements * k + j]);
+                    if (U.elements[num_elements * k + k] == 0) {
+                        fprintf(stderr, "Numerical instability. The principal diagonal element is zero.\n");
+                    }
+
+                    U.elements[num_elements * k + j] = (float)(U.elements[num_elements * k + j] / U.elements[num_elements * k + k]); 	/* Division step */
+            
                 }
 
-                U.elements[num_elements * i + k] = 0;
+                U.elements[num_elements * k + k] = 1; /* Set the principal diagonal entry in U to 1 */
+            
             }
+
+            #pragma omp barrier
+
+            for (int i = k + 1; i < num_elements; i++) {
+                if ( (i % thread_count) == tid) {
+                    for (int j = (k + 1); j < num_elements; j++) {
+                        U.elements[num_elements * i + j] -= (U.elements[num_elements * i + k] * U.elements[num_elements * k + j]);
+                    }
+
+                    U.elements[num_elements * i + k] = 0;
+                }
+            }
+
+            #pragma omp barrier
+
         }
 
-        #pragma omp barrier
-
     }
 
-    if (tid == (thread_count - 1) ) {
-        U.elements[num_elements * (num_elements - 1) + num_elements - 1] = 1;
-    }
-
-    }
-
-    // Print out matrix
-    // for (int i = 0; i < num_elements; i++) {
-    //     for (int j = 0; j < num_elements; j++) {
-    //         fprintf(stderr, "%.2f ", U.elements[num_elements * i + j]);
-    //     }
-    // fprintf(stderr, "\n");     
-    // }
-
+    U.elements[num_elements * (num_elements - 1) + num_elements - 1] = 1;
 }
 
 
