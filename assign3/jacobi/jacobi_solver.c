@@ -2,45 +2,27 @@
  * by iteration.
 
  * Author: Naga Kandasamy
- * Date modified: April 22, 2020
+ * Date modified: April 29, 2020
  *
  * Compile as follows:
- * gcc -o jacobi_solver jacobi_solver.c compute_gold.c -Wall -O3 -lpthread -lm -std=c99
+ * gcc -o jacobi_solver jacobi_solver.c compute_gold.c -fopenmp -std=c99 -Wall -O3 -lm -std=c99
 */
-
-#define _GNU_SOURCE
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
 #include <math.h>
-#include <pthread.h>
+#include <omp.h>
 #include <sys/time.h>
 #include "jacobi_solver.h"
-
-/* Shared data structure used by the threads */
-typedef struct args_for_thread_t {
-    int tid;                          /* The thread ID */
-    int num_threads;                  /* Number of worker threads */
-    int rows;                         /* Number of rows in the vectors */
-    int columns;                      /* Number of columns in the vectors */
-    matrix_t A;                       /* Matrix A */
-    matrix_t B;                       /* Matrix B */
-    matrix_t x1;                      /* Matrix x (ping) */
-    matrix_t x2;                      /* Matrix x (pong) */
-    int num_iter;                     /* Iteration counter */
-    pthread_barrier_t *barrier;       /* Barrier */
-    double *diff;                     /* Partial diff array (ping) */
-    double *diff2;                    /* Partial diff array (pong) */
-} ARGS_FOR_THREAD;
 
 /* Uncomment the line below to spit out debug information */ 
 /* #define DEBUG */
 
 int main(int argc, char **argv) 
 {
-	if (argc != 2) {
+	if (argc < 2) {
 		fprintf(stderr, "Usage: %s matrix-size\n", argv[0]);
         fprintf(stderr, "matrix-size: width of the square matrix\n");
 		exit(EXIT_FAILURE);
@@ -87,15 +69,19 @@ int main(int argc, char **argv)
     gettimeofday(&stop, NULL);
     display_jacobi_solution(A, reference_x, B); /* Display statistics */
 	
-	/* Compute the Jacobi solution using pthreads. 
-     * Solutions are returned in mt_solution_x.
+	/* Compute the Jacobi solution using openMP. 
+     * Solution is returned in mt_solution_x.
      * */
-    fprintf(stderr, "\nPerforming Jacobi iteration using pthreads\n\n");
+    // fprintf(stderr, "\nPerforming Jacobi iteration using omp\n");
+	// compute_using_omp(A, mt_solution_x, B, 4);
+    // display_jacobi_solution(A, mt_solution_x, B); /* Display statistics */
+
+    fprintf(stderr, "\nPerforming Jacobi iteration using omp\n\n");
     for (int i = 0; i < sizeof(threads)/sizeof(threads[0]); i++)
     {
         printf("Performing with %i threads\n", threads[i]);
         gettimeofday(&start1, NULL);
-        compute_using_pthreads(A, mt_solution_x, B, threads[i]);
+        compute_using_omp(A, mt_solution_x, B, threads[i]);
         gettimeofday(&stop1, NULL);
         display_jacobi_solution(A, mt_solution_x, B); /* Display statistics */
         printf("\n");
@@ -108,8 +94,6 @@ int main(int argc, char **argv)
     {
         printf("%i-Threaded Execution Time = %fs\n", threads[i], pthread_times[i]);
     }
-    // printf ("Thread Execution time = %fs\n", (float) (stop1.tv_sec - start1.tv_sec + (stop1.tv_usec - start1.tv_usec)/(float) 1000000));
-    printf ("\n");
     
     free(A.elements); 
 	free(B.elements); 
@@ -119,116 +103,60 @@ int main(int argc, char **argv)
     exit(EXIT_SUCCESS);
 }
 
-/* FIXME: Complete this function to perform the Jacobi calculation using pthreads. 
+/* FIXME: Complete this function to perform the Jacobi calculation using openMP. 
  * Result must be placed in mt_sol_x. */
-void compute_using_pthreads (const matrix_t A, matrix_t mt_sol_x, const matrix_t B, int num_threads)
+void compute_using_omp(const matrix_t A, matrix_t mt_sol_x, const matrix_t B, int num_threads)
 {
-    pthread_t *tid = (pthread_t *) malloc (sizeof (pthread_t) * num_threads); /* Data structure to store the thread IDs */
-    if (tid == NULL) {
-        perror ("malloc");
-        exit (EXIT_FAILURE);
-    }
-
-    pthread_attr_t attributes;                  /* Thread attributes */    
-    pthread_attr_init (&attributes);            /* Initialize the thread attributes to the default values */
-
-    ARGS_FOR_THREAD **args_for_thread;
-    args_for_thread = malloc (sizeof (ARGS_FOR_THREAD) * num_threads);
-
-    int i, j;
-    pthread_barrier_t *barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t *));
-    pthread_barrier_init(barrier,NULL,num_threads);
-
+    /* Initialize current jacobi solution. */
+    for (int i = 0; i < A.num_rows; i++)
+        mt_sol_x.elements[i] = B.elements[i];
+    
     /* Create partial diff arrays for threads */
     double *diff = (double *) malloc (num_threads * sizeof (double));
     if (diff == NULL) {
         perror ("Malloc");
         return;
     }
-    double *diff2 = (double *) malloc (num_threads * sizeof (double));
-    if (diff2 == NULL) {
-        perror ("Malloc");
-        return;
-    }
-    
-    /* Initialize current jacobi solution. */
-    for (i = 0; i < A.num_rows; i++)
-        mt_sol_x.elements[i] = B.elements[i];
 
     matrix_t new_x = allocate_matrix(A.num_rows, 1, 0);
 
-    for (i = 0; i < num_threads; i++) {
-        args_for_thread[i] = (ARGS_FOR_THREAD *) malloc (sizeof (ARGS_FOR_THREAD));
-        args_for_thread[i]->tid = i;
-        args_for_thread[i]->num_threads = num_threads;
-        args_for_thread[i]->rows = A.num_rows;
-        args_for_thread[i]->columns = A.num_columns;
-        args_for_thread[i]->A = A;
-        args_for_thread[i]->B = B;
-        args_for_thread[i]->x1 = mt_sol_x;
-        args_for_thread[i]->x2 = new_x;
-        args_for_thread[i]->num_iter = 0;
-        args_for_thread[i]->barrier = barrier;
-        args_for_thread[i]->diff = diff;
-        args_for_thread[i]->diff2 = diff2;
-        pthread_create (&tid[i], &attributes, jacobi, (void *) args_for_thread[i]);
-    }
-
-    for (i = 0; i < num_threads; i++)
-        pthread_join (tid[i], NULL);
-
-    fprintf(stderr, "Convergence achieved after %d iterations\n", args_for_thread[0]->num_iter);
-
-    /* Free data structures */
-    for(j = 0; j < num_threads; j++)
-        free ((void *) args_for_thread[j]);
-}
-
-void * jacobi (void *args) 
-{
-    ARGS_FOR_THREAD *args_for_me = (ARGS_FOR_THREAD *) args; /* Typecast the argument to a pointer the the ARGS_FOR_THREAD structure */
-
     /* Perform Jacobi iteration. */
     int done = 0;
+    int num_iter = 0;
     double mse, sum, total;
 
     /* Pingpong buffers (pointers) */
-    float * x1 = args_for_me->x1.elements;
-    float * x2 = args_for_me->x2.elements;
-
-    double * diff = args_for_me->diff;
-    double * diff2 = args_for_me->diff2;
+    float * x1 = mt_sol_x.elements;
+    float * x2 = new_x.elements;
 
     while (!done)
     {
-        diff[args_for_me->tid] = 0.0;
         total = 0.0;
-        int i, j;
-        for (i = args_for_me->tid; i < args_for_me->rows; i += args_for_me->num_threads)
+    #pragma omp parallel num_threads(num_threads)
         {
-            sum = -args_for_me->A.elements[i * args_for_me->columns + i] * x1[i];
+            int tid = omp_get_thread_num();
+            diff[tid] = 0;
+        #pragma omp for
+            for (int i = 0; i < A.num_rows; i++)
+            {
+                sum = -A.elements[i * A.num_columns + i] * x1[i];
             
-            for (j = 0; j < args_for_me->columns; j++) 
-                sum += args_for_me->A.elements[i * args_for_me->columns + j] * x1[j];
+                for (int j = 0; j < A.num_columns; j++) 
+                    sum += A.elements[i * A.num_columns + j] * x1[j];
 
-            x2[i] = (args_for_me->B.elements[i] - sum)/args_for_me->A.elements[i * args_for_me->columns + i];
-            diff[args_for_me->tid] += (x2[i] - x1[i]) * (x2[i] - x1[i]);
+                x2[i] = (B.elements[i] - sum)/A.elements[i * A.num_columns + i];
+                diff[tid] += (x2[i] - x1[i]) * (x2[i] - x1[i]);
+            }
         }
-        args_for_me->num_iter++;
+        num_iter++;
 
         /* Swap buffers */
         float * temp = x1;
         x1 = x2;
         x2 = temp;
-        
-        double * temp2 = diff;
-        diff = diff2;
-        diff2 = temp2;
 
-        pthread_barrier_wait(args_for_me->barrier);
-
-        for(int i = 0; i < args_for_me->num_threads; i++) /* Accumulate total difference for mse */
-            total += diff2[i];
+        for(int i = 0; i < num_threads; i++) /* Accumulate total difference for mse */
+            total += diff[i];
         
         mse = sqrt(total); /* Mean squared error. */
 
@@ -236,7 +164,7 @@ void * jacobi (void *args)
             done = 1;
     }
 
-    pthread_exit ((void *)0);
+    fprintf(stderr, "Convergence achieved after %d iterations\n", num_iter);
 }
 
 /* Allocate a matrix of dimensions height * width.
@@ -260,7 +188,7 @@ matrix_t allocate_matrix(int num_rows, int num_columns, int init)
 	}
     
     return M;
-}
+}	
 
 /* Print matrix to screen */
 void print_matrix(const matrix_t M)
