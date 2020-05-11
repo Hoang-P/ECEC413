@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include <math.h>
+#include <omp.h>
 #include "gauss_eliminate.h"
 
 #define MIN_NUMBER 2
