@@ -306,7 +306,9 @@ swarm_t *pso_init_omp(char *function, int dim, int swarm_size,
     if (swarm->particle == NULL)
         return NULL;
 
-    #pragma omp parallel for num_threads(num_threads) private(particle)
+#pragma omp parallel num_threads(num_threads) private(particle, status, fitness)
+{
+    #pragma omp for
     for (i = 0; i < swarm->num_particles; i++) {
         particle = &swarm->particle[i];
         particle->dim = dim; 
@@ -336,13 +338,17 @@ swarm_t *pso_init_omp(char *function, int dim, int swarm_size,
         /* Initialize index of best performing particle */
         particle->g = -1;
     }
+    
 
     /* Get index of particle with best fitness */
-    g = pso_get_best_fitness(swarm);
+#pragma omp single
+    g = pso_get_best_fitness_omp(swarm, num_threads);
+#pragma omp for
     for (i = 0; i < swarm->num_particles; i++) {
         particle = &swarm->particle[i];
         particle->g = g;
     }
+}
 
     return swarm;
 }

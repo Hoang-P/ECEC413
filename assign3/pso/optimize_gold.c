@@ -9,12 +9,14 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <sys/time.h>
 #include "pso.h"
 
 /* Solve PSO */
 int pso_solve_gold(char *function, swarm_t *swarm, 
                     float xmax, float xmin, int max_iter)
 {
+    struct timeval start, stop; /* Create time structures */
     int i, j, iter, g;
     float w, c1, c2;
     float r1, r2;
@@ -26,6 +28,7 @@ int pso_solve_gold(char *function, swarm_t *swarm,
     c2 = 1.49;
     iter = 0;
     g = -1;
+    gettimeofday(&start, NULL);
     while (iter < max_iter) {
         for (i = 0; i < swarm->num_particles; i++) {
             particle = &swarm->particle[i];
@@ -74,6 +77,8 @@ int pso_solve_gold(char *function, swarm_t *swarm,
 #endif
         iter++;
     } /* End of iteration */
+    gettimeofday(&stop, NULL);
+    printf ("Ref Execution Time = %fs\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
     return g;
 }
 
