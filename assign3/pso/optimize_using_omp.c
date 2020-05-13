@@ -11,14 +11,12 @@
 #include <math.h>
 #include <string.h>
 #include <omp.h>
-#include <sys/time.h>
 #include "pso.h"
 
 int pso_solve_omp(char *function, swarm_t *swarm, 
                     float xmax, float xmin, int max_iter, int num_threads)
 {
-    struct timeval start, stop; /* Create time structures */
-    int i, j, iter, g;
+    int iter, g;
     float w, c1, c2;
     float r1, r2;
     float curr_fitness;
@@ -30,16 +28,15 @@ int pso_solve_omp(char *function, swarm_t *swarm,
     c2 = 1.49;
     iter = 0;
     g = -1;
-    gettimeofday(&start, NULL);
     while (iter < max_iter) {
-    #pragma omp parallel num_threads(num_threads) private(particle, gbest, r1, r2, curr_fitness, seed)
+    #pragma omp parallel num_threads(num_threads) shared (g) private(particle, gbest, r1, r2, curr_fitness, seed)
     {
     #pragma omp for
-        for (i = 0; i < swarm->num_particles; i++) {
+        for (int i = 0; i < swarm->num_particles; i++) {
             particle = &swarm->particle[i];
             gbest = &swarm->particle[particle->g];  /* Best performing particle from last iteration */
             // seed = time(NULL);
-            for (j = 0; j < particle->dim; j++) {   /* Update this particle's state */
+            for (int j = 0; j < particle->dim; j++) {   /* Update this particle's state */
                 r1 = (float)rand_r(&seed)/(float)RAND_MAX;
                 r2 = (float)rand_r(&seed)/(float)RAND_MAX;
                 /* Update particle velocity */
@@ -64,7 +61,7 @@ int pso_solve_omp(char *function, swarm_t *swarm,
             /* Update pbest */
             if (curr_fitness < particle->fitness) {
                 particle->fitness = curr_fitness;
-                for (j = 0; j < particle->dim; j++)
+                for (int j = 0; j < particle->dim; j++)
                     particle->pbest[j] = particle->x[j];
             }
         } /* Particle loop */
@@ -75,7 +72,7 @@ int pso_solve_omp(char *function, swarm_t *swarm,
     #pragma omp single
         g = pso_get_best_fitness_omp(swarm, num_threads);
     #pragma omp for
-        for (i = 0; i < swarm->num_particles; i++) {
+        for (int i = 0; i < swarm->num_particles; i++) {
             particle = &swarm->particle[i];
             particle->g = g;
         }
@@ -88,8 +85,7 @@ int pso_solve_omp(char *function, swarm_t *swarm,
 #endif
         iter++;
     }
-    gettimeofday(&stop, NULL);
-    printf ("OMP Execution Time = %fs\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
+
     return g;
 }
 

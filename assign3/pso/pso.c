@@ -17,6 +17,7 @@
  */  
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include "pso.h"
 
 int main(int argc, char **argv)
@@ -40,9 +41,13 @@ int main(int argc, char **argv)
     int max_iter = atoi(argv[6]);
     int num_threads = atoi(argv[7]);
 
+    struct timeval start, stop, start1, stop1; /* Create time structures */
+
     /* Optimize using reference version */
     int status;
+    gettimeofday(&start, NULL);
     status = optimize_gold(function, dim, swarm_size, xmin, xmax, max_iter);
+    gettimeofday(&stop, NULL);
     if (status < 0) {
         fprintf(stderr, "Error optimizing function using reference code\n");
         exit (EXIT_FAILURE);
@@ -52,11 +57,16 @@ int main(int argc, char **argv)
      * Return -1 on error, 0 on success. Print best-performing 
      * particle within the function prior to returning. 
      */
+    gettimeofday(&start1, NULL);
     status = optimize_using_omp(function, dim, swarm_size, xmin, xmax, max_iter, num_threads);
+    gettimeofday(&stop1, NULL);
     if (status < 0) {
         fprintf(stderr, "Error optimizing function using OpenMP\n");
         exit (EXIT_FAILURE);
     }
+
+    printf ("\nRef Execution Time = %fs\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
+    printf ("OMP Execution Time = %fs\n", (float) (stop1.tv_sec - start1.tv_sec + (stop1.tv_usec - start1.tv_usec)/(float) 1000000));
     
     exit(EXIT_SUCCESS);
 }
