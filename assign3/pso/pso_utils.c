@@ -16,6 +16,13 @@ float uniform(float min, float max)
     return (min + normalized * (max - min));
 }
 
+float uniform_omp(float min, float max, unsigned int *seed)
+{
+    float normalized; 
+    normalized = (float)rand_r(seed)/(float)RAND_MAX;
+    return (min + normalized * (max - min));
+}
+
 /* Evaluate the eggholder function:
  *      f(x, y) = -(y + 47) * sin(sqrt(abs(y + x/2 + 47))) - x * sin(sqrt(abs(x - (y + 47))))
  *      Evaluated over the domain [-512, 512]
@@ -157,14 +164,18 @@ int pso_get_best_fitness_omp(swarm_t *swarm, int num_threads)
     particle_t *particle;
 
     // g = -1;
-#pragma omp parallel for num_threads(num_threads) private(particle)
+#pragma omp parallel num_threads(num_threads) private(particle)
+{
+    int tid = omp_get_thread_num();
+#pragma omp for
     for (i = 0; i < swarm->num_particles; i++) {
         particle = &swarm->particle[i];
-        if (particle->fitness < best_fitness[omp_get_thread_num()]) {
-            best_fitness[omp_get_thread_num()] = particle->fitness;
-            g[omp_get_thread_num()] = i;
+        if (particle->fitness < best_fitness[tid]) {
+            best_fitness[tid] = particle->fitness;
+            g[tid] = i;
         }
     }
+}
 
     fitness = best_fitness[0];
     g_to_return = g[0];
@@ -299,28 +310,32 @@ swarm_t *pso_init_omp(char *function, int dim, int swarm_size,
     float fitness;
     swarm_t *swarm;
     particle_t *particle;
+    unsigned int seed = time(NULL);
 
     swarm = (swarm_t *)malloc(sizeof(swarm_t));
     swarm->num_particles = swarm_size;
     swarm->particle = (particle_t *)malloc(swarm_size * sizeof(particle_t));
-    if (swarm->particle == NULL)
+    if (swarm->particle == NULL) {
+        fprintf(stderr, "Malloc error\n");
         return NULL;
+    }
 
-#pragma omp parallel num_threads(num_threads) private(particle, status, fitness)
+#pragma omp parallel num_threads(num_threads) private(particle, status, fitness, seed)
 {
     #pragma omp for
     for (int i = 0; i < swarm->num_particles; i++) {
+        seed += omp_get_thread_num();
         particle = &swarm->particle[i];
         particle->dim = dim; 
         /* Generate random particle position */
         particle->x = (float *)malloc(dim * sizeof(float));
         for (int j = 0; j < dim; j++)
-           particle->x[j] = uniform(xmin, xmax);
+           particle->x[j] = uniform_omp(xmin, xmax, &seed);
 
        /* Generate random particle velocity */ 
         particle->v = (float *)malloc(dim * sizeof(float));
         for (int j = 0; j < dim; j++)
-            particle->v[j] = uniform(-fabsf(xmax - xmin), fabsf(xmax - xmin));
+            particle->v[j] = uniform_omp(-fabsf(xmax - xmin), fabsf(xmax - xmin), &seed);
 
         /* Initialize best position for particle */
         particle->pbest = (float *)malloc(dim * sizeof(float));

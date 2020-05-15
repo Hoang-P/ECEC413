@@ -28,6 +28,7 @@ void print_args(char *, int, int, float, float);
 void pso_print_swarm(swarm_t *);
 void pso_print_particle(particle_t *);
 float uniform(float, float);
+float uniform_omp(float, float, unsigned int *);
 swarm_t *pso_init(char *, int, int, float, float);
 swarm_t *pso_init_omp(char *, int, int, float, float, int);
 int pso_eval_fitness(char *, particle_t *, float *);

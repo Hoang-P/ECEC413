@@ -33,6 +33,7 @@ int pso_solve_omp(char *function, swarm_t *swarm,
     {
     #pragma omp for
         for (int i = 0; i < swarm->num_particles; i++) {
+            seed += omp_get_thread_num();
             particle = &swarm->particle[i];
             gbest = &swarm->particle[particle->g];  /* Best performing particle from last iteration */
             // seed = time(NULL);
@@ -45,7 +46,7 @@ int pso_solve_omp(char *function, swarm_t *swarm,
                                  + c2 * r2 * (gbest->x[j] - particle->x[j]);
                 /* Clamp velocity */
                 if ((particle->v[j] < -fabsf(xmax - xmin)) || (particle->v[j] > fabsf(xmax - xmin))) 
-                    particle->v[j] = uniform(-fabsf(xmax - xmin), fabsf(xmax - xmin));
+                    particle->v[j] = uniform_omp(-fabsf(xmax - xmin), fabsf(xmax - xmin), &seed);
 
                 /* Update particle position */
                 particle->x[j] = particle->x[j] + particle->v[j];
@@ -98,7 +99,7 @@ int optimize_using_omp(char *function, int dim, int swarm_size,
 
     /* Initialize PSO */
     swarm_t *swarm;
-    srand(time(NULL));
+    // srand(time(NULL));
     swarm = pso_init_omp(function, dim, swarm_size, xmin, xmax, num_threads);
     if (swarm == NULL) {
         fprintf(stderr, "Unable to initialize PSO\n");
