@@ -9,6 +9,7 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <sys/time.h>
 #include "pso.h"
 
 /* Solve PSO */
@@ -74,6 +75,7 @@ int pso_solve_gold(char *function, swarm_t *swarm,
 #endif
         iter++;
     } /* End of iteration */
+    
     return g;
 }
 

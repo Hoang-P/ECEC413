@@ -72,10 +72,6 @@ int main(int argc, char **argv)
 	/* Compute the Jacobi solution using openMP. 
      * Solution is returned in mt_solution_x.
      * */
-    // fprintf(stderr, "\nPerforming Jacobi iteration using omp\n");
-	// compute_using_omp(A, mt_solution_x, B, 4);
-    // display_jacobi_solution(A, mt_solution_x, B); /* Display statistics */
-
     fprintf(stderr, "\nPerforming Jacobi iteration using omp\n\n");
     for (int i = 0; i < sizeof(threads)/sizeof(threads[0]); i++)
     {
