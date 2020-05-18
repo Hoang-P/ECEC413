@@ -38,6 +38,8 @@ int main(int argc, char **argv)
     /* Allocate memory for the input and output images */
     int size = atoi(argv[1]);
 
+    struct timeval start, stop; /* Create time structures */
+
     fprintf(stderr, "Creating %d x %d images\n", size, size);
     image_t in, out_gold, out_gpu;
     in.size = out_gold.size = out_gpu.size = size;
@@ -57,32 +59,35 @@ int main(int argc, char **argv)
   
    /* Calculate the blur on the CPU. The result is stored in out_gold. */
     fprintf(stderr, "Calculating blur on the CPU\n"); 
-    compute_gold(in, out_gold); 
+    gettimeofday(&start, NULL);
+    compute_gold(in, out_gold);
+    gettimeofday(&stop, NULL);
+    printf ("Ref Execution Time = %fs\n\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
 
 #ifdef DEBUG 
    print_image(in);
    print_image(out_gold);
 #endif
 
-   /* FIXME: Calculate the blur on the GPU. The result is stored in out_gpu. */
-   fprintf(stderr, "Calculating blur on the GPU\n");
-   compute_on_device(in, out_gpu);
+    /* FIXME: Calculate the blur on the GPU. The result is stored in out_gpu. */
+    fprintf(stderr, "Calculating blur on the GPU\n");
+    compute_on_device(in, out_gpu);
 
-   /* Check CPU and GPU results for correctness */
-   fprintf(stderr, "Checking CPU and GPU results\n");
-   int num_elements = out_gold.size * out_gold.size;
-   float eps = 1e-6;    /* Do not change */
-   int check;
-   check = check_results(out_gold.element, out_gpu.element, num_elements, eps);
-   if (check == 0) 
-       fprintf(stderr, "TEST PASSED\n");
-   else
-       fprintf(stderr, "TEST FAILED\n");
+    /* Check CPU and GPU results for correctness */
+    fprintf(stderr, "Checking CPU and GPU results\n");
+    int num_elements = out_gold.size * out_gold.size;
+    float eps = 1e-6;    /* Do not change */
+    int check;
+    check = check_results(out_gold.element, out_gpu.element, num_elements, eps);
+    if (check == 0) 
+        fprintf(stderr, "TEST PASSED\n");
+    else
+        fprintf(stderr, "TEST FAILED\n");
    
-   /* Free data structures on the host */
-   free((void *)in.element);
-   free((void *)out_gold.element);
-   free((void *)out_gpu.element);
+    /* Free data structures on the host */
+    free((void *)in.element);
+    free((void *)out_gold.element);
+    free((void *)out_gpu.element);
 
     exit(EXIT_SUCCESS);
 }
@@ -90,7 +95,40 @@ int main(int argc, char **argv)
 /* FIXME: Complete this function to calculate the blur on the GPU */
 void compute_on_device(const image_t in, image_t out)
 {
+    struct timeval start, stop;
+    int imgSize = in.size * in.size;
+    
+    float *inOnDevice = NULL;
+    float *outOnDevice = NULL;
+
+    cudaMalloc((void **)&inOnDevice, imgSize *  sizeof(float));
+    cudaMalloc((void **)&outOnDevice, imgSize * sizeof(float));
+
+    cudaMemcpy(inOnDevice, in.element, imgSize * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(outOnDevice, out.element, imgSize * sizeof(float), cudaMemcpyHostToDevice);
+
+    gettimeofday (&start, NULL);
+    dim3 threads(32, 32);
+    dim3 grid(in.size / 32, in.size / 32);
+
+    blur_filter_kernel<<< grid, threads >>>(inOnDevice, outOnDevice, in.size);
+    cudaDeviceSynchronize();
+
+    cudaError_t err = cudaGetLastError(); 	    /* Check for error */
+	if (cudaSuccess != err) {
+		fprintf(stderr, "Kernel execution failed: %s\n", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+    }
+    gettimeofday (&stop, NULL);
+    printf ("CUDA Execution Time = %fs\n\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
+    
+    cudaMemcpy(out.element, outOnDevice, imgSize * sizeof(float), cudaMemcpyDeviceToHost);
+
+    cudaFree(inOnDevice);
+    cudaFree(outOnDevice);
+
     return;
+    
 }
 
 /* Check correctness of results */
