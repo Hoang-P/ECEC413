@@ -21,7 +21,7 @@ void print_matrix(float *, int, int);
 #define COEFF 10
 
 /* Uncomment line below to spit out debug information */
-// #define DEBUG
+#define DEBUG
 
 /* Include device code */
 #include "separable_convolution_kernel.cu"
@@ -31,6 +31,46 @@ void compute_on_device(float *gpu_result, float *matrix_c,\
                    float *kernel, int num_cols,\
                    int num_rows, int half_width)
 {
+
+    float *rDevice = NULL; /* result on device */
+    float *mDevice = NULL; /* matrix on device */
+    float *kDevice = NULL; /* kernel on device */
+
+    int num_elements = num_cols * num_rows;
+    int kernel_size = (HALF_WIDTH * 2 - 1);
+
+    
+    cudaMalloc( (void **) &rDevice, num_elements * sizeof(float) );
+    cudaMalloc( (void **) &mDevice, num_elements * sizeof(float) );
+    cudaMalloc( (void **) &kDevice, kernel_size * sizeof(float) );
+
+
+    cudaMemcpy(mDevice, matrix_c, num_elements * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(kDevice, kernel, kernel_size * sizeof(float), cudaMemcpyHostToDevice);
+
+    dim3 threads(4, 4);
+    dim3 grid(num_rows / 4, num_cols / 4);
+
+    convolve_kernel_naive <<< grid, threads >>>(rDevice, mDevice, kDevice, num_cols, num_rows, HALF_WIDTH);
+    cudaDeviceSynchronize();
+
+    cudaError_t err = cudaGetLastError(); 	    /* Check for error */
+	if (cudaSuccess != err) {
+		fprintf(stderr, "Kernel execution failed: %s\n", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+    }
+
+    cudaMemcpy(gpu_result, mDevice, num_elements * sizeof(float), cudaMemcpyDeviceToHost);
+
+    #ifdef DEBUG	 
+    print_matrix(gpu_result, num_cols, num_rows);
+    #endif
+
+    cudaFree(rDevice);
+    cudaFree(mDevice);
+    cudaFree(kDevice);
+
+
     return;
 }
 
