@@ -92,7 +92,7 @@ __global__ void convolve_kernel_naive(float *gpu_result, float *matrix_c, float 
 
     __syncthreads();
 
-    convolve_rows_kernel_naive(matrix_c, gpu_result, kernel, num_cols, num_rows, half_width);
+    convolve_columns_kernel_naive(matrix_c, gpu_result, kernel, num_cols, num_rows, half_width);
 
     __syncthreads();
 
