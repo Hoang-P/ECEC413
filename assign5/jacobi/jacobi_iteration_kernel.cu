@@ -24,9 +24,11 @@ __global__ void jacobi_iteration_kernel_naive(float *A, float *naive, float *B, 
     unsigned int threadID = threadIdx.x;
     unsigned int dataID = blockIdx.x * blockDim.x + threadIdx.x;
 
+    /* Reset ssd to 0 */
     if (dataID == 0)
         *ssd = 0.0;
 
+    /* Perform jacobi */
     double sum = -A[dataID * MATRIX_SIZE + dataID] * naive[dataID];
     for (int j = 0; j < MATRIX_SIZE; j++) {
         sum += A[dataID * MATRIX_SIZE + j] * naive[j];
@@ -42,13 +44,14 @@ __global__ void jacobi_iteration_kernel_naive(float *A, float *naive, float *B, 
 
     __syncthreads();
 
+    /* Parallel reduction */
 	for (unsigned int stride = blockDim.x >> 1; stride > 0; stride = stride >> 1) {
 		if(threadID < stride)
             ssd_array[threadID] += ssd_array[threadID + stride];
 		__syncthreads();
     }
 
-	/* Store result. */
+	/* Store result to global ssd. */
     if (threadID == 0) {
 		lock(mutex);
 		*ssd += ssd_array[0];
@@ -66,9 +69,11 @@ __global__ void jacobi_iteration_kernel_optimized(float *A, float *naive, float 
     unsigned int threadID = threadIdx.x;
     unsigned int dataID = blockIdx.x * blockDim.x + threadIdx.x;
 
+    /* Reset ssd to 0 */
     if (dataID == 0)
         *ssd = 0.0;
 
+    /* Perform jacobi */
     double sum = -A[dataID * MATRIX_SIZE + dataID] * naive[dataID];
     for (int j = 0; j < MATRIX_SIZE; j++) {
         sum += A[dataID + MATRIX_SIZE * j] * naive[j];
@@ -84,13 +89,14 @@ __global__ void jacobi_iteration_kernel_optimized(float *A, float *naive, float 
 
     __syncthreads();
 
+    /* Parallel reduction */
 	for (unsigned int stride = blockDim.x >> 1; stride > 0; stride = stride >> 1) {
 		if(threadID < stride)
             ssd_array[threadID] += ssd_array[threadID + stride];
 		__syncthreads();
     }
 
-	/* Store result. */
+	/* Store result to global ssd. */
     if (threadID == 0) {
 		lock(mutex);
 		*ssd += ssd_array[0];

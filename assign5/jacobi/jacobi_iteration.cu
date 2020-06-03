@@ -108,11 +108,12 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
     /* Allocate n x 1 matrix to hold iteration values */
     float *new_x = NULL;
 
-    for (int i = 0; i < num_cols; ++i)
-        for (int j = 0; j < num_rows; ++j)
-            new_A[ i * num_rows + j ] = A.elements[ j * num_cols + i ];
+    /* Create grid and thread block sizes */
+    dim3 threads(THREAD_BLOCK_SIZE, 1);
+    dim3 grid(MATRIX_SIZE / THREAD_BLOCK_SIZE, 1);
 
     gettimeofday (&start, NULL);
+    /* Malloc CUDA kernel arguments */
     cudaMalloc((void **)&A_device, size * sizeof(float));
     cudaMalloc((void **)&B_device, MATRIX_SIZE * sizeof(float));
     cudaMalloc((void **)&naive, MATRIX_SIZE * sizeof(float));
@@ -120,6 +121,7 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
     cudaMalloc((void **)&new_x, MATRIX_SIZE * sizeof(float));
     cudaMalloc((void **)&ssd_dev, sizeof(double));
 
+    /* Copy from host to device */
     cudaMemcpy(A_device, A.elements, size * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(B_device, B.elements, MATRIX_SIZE * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(naive, B.elements, MATRIX_SIZE * sizeof(float), cudaMemcpyHostToDevice);
@@ -128,9 +130,6 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
     /* Allocate space for the lock on GPU and initialize it */
 	cudaMalloc((void **)&mutex_on_device, sizeof(int));
 	cudaMemset(mutex_on_device, 0, sizeof(int));
-
-    dim3 threads(THREAD_BLOCK_SIZE, 1);
-    dim3 grid(num_rows / THREAD_BLOCK_SIZE, 1);
 
     while(!done)
     {
@@ -160,10 +159,13 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
     num_iter_naive = 0;
 
     gettimeofday (&start, NULL);
+    
+    /* Convert A matrix from row major format to column major format */
     for (int i = 0; i < num_cols; ++i)
         for (int j = 0; j < num_rows; ++j)
             new_A[ i * num_rows + j ] = A.elements[ j * num_cols + i ];
 
+    /* Malloc CUDA kernel arguments */
     cudaMalloc((void **)&A_device, size * sizeof(float));
     cudaMalloc((void **)&B_device, MATRIX_SIZE * sizeof(float));
     cudaMalloc((void **)&naive, MATRIX_SIZE * sizeof(float));
@@ -171,10 +173,15 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
     cudaMalloc((void **)&new_x, MATRIX_SIZE * sizeof(float));
     cudaMalloc((void **)&ssd_dev, sizeof(double));
 
+    /* Allocate space for the lock on GPU and initialize it */
     cudaMemcpy(A_device, new_A, size * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(B_device, B.elements, MATRIX_SIZE * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(naive, B.elements, MATRIX_SIZE * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(opt, B.elements, MATRIX_SIZE * sizeof(float), cudaMemcpyHostToDevice);
+
+    /* Allocate space for the lock on GPU and initialize it */
+	cudaMalloc((void **)&mutex_on_device, sizeof(int));
+	cudaMemset(mutex_on_device, 0, sizeof(int));
     
     while(!done)
     {
