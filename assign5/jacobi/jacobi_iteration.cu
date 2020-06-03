@@ -146,7 +146,7 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
             done = 1;
     }
 
-    (!pingpong) ? (cudaMemcpy(gpu_naive_sol_x.elements, naive, MATRIX_SIZE * sizeof(float), cudaMemcpyDeviceToHost)) : \
+    (pingpong) ? (cudaMemcpy(gpu_naive_sol_x.elements, naive, MATRIX_SIZE * sizeof(float), cudaMemcpyDeviceToHost)) : \
                         (cudaMemcpy(gpu_naive_sol_x.elements, new_x, MATRIX_SIZE * sizeof(float), cudaMemcpyDeviceToHost));
 
     gettimeofday (&stop, NULL);
@@ -198,7 +198,7 @@ void compute_on_device(const matrix_t A, matrix_t gpu_naive_sol_x,
             done = 1;
     }
 
-    (!pingpong) ? (cudaMemcpy(gpu_opt_sol_x.elements, opt, MATRIX_SIZE * sizeof(float), cudaMemcpyDeviceToHost)) : \
+    (pingpong) ? (cudaMemcpy(gpu_opt_sol_x.elements, opt, MATRIX_SIZE * sizeof(float), cudaMemcpyDeviceToHost)) : \
                         (cudaMemcpy(gpu_opt_sol_x.elements, new_x, MATRIX_SIZE * sizeof(float), cudaMemcpyDeviceToHost));
 
     gettimeofday (&stop, NULL);
