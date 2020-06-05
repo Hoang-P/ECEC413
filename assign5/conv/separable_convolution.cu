@@ -21,7 +21,7 @@ void print_matrix(float *, int, int);
 #define COEFF 10
 
 /* Uncomment line below to spit out debug information */
-#define DEBUG
+// #define DEBUG
 
 /* Include device code */
 #include "separable_convolution_kernel.cu"
@@ -31,45 +31,34 @@ void compute_on_device(float *gpu_result, float *matrix_c,\
                    float *kernel, int num_cols,\
                    int num_rows, int half_width)
 {
+    int width = 2 * half_width + 1;
+    int num_elements = num_rows * num_cols;
+    int thread_block_size = 32;
 
     float *rDevice = NULL; /* result on device */
     float *mDevice = NULL; /* matrix on device */
     float *kDevice = NULL; /* kernel on device */
 
-    int num_elements = num_cols * num_rows;
-    int kernel_size = (HALF_WIDTH * 2 - 1);
-
-    
-    cudaMalloc( (void **) &rDevice, num_elements * sizeof(float) );
-    cudaMalloc( (void **) &mDevice, num_elements * sizeof(float) );
-    cudaMalloc( (void **) &kDevice, kernel_size * sizeof(float) );
-
+    cudaMalloc((void **)&rDevice, num_elements * sizeof(float));
+    cudaMalloc((void **)&mDevice, num_elements * sizeof(float));
+    cudaMalloc((void **)&kDevice, width * sizeof(float));
 
     cudaMemcpy(mDevice, matrix_c, num_elements * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(kDevice, kernel, kernel_size * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(kDevice, kernel, width * sizeof(float), cudaMemcpyHostToDevice);
 
-    dim3 threads(4, 4);
-    dim3 grid(num_rows / 4, num_cols / 4);
+    dim3 threads(thread_block_size, thread_block_size);
+    dim3 grid(num_cols / thread_block_size, num_rows / thread_block_size);
 
-    convolve_kernel_naive <<< grid, threads >>>(rDevice, mDevice, kDevice, num_cols, num_rows, HALF_WIDTH);
+    convolve_rows_kernel_naive<<< grid, threads >>>(rDevice, mDevice, kDevice, num_cols, num_rows, half_width);
+    cudaDeviceSynchronize();
+    convolve_columns_kernel_naive<<< grid, threads >>>(mDevice, rDevice, kDevice, num_cols, num_rows, half_width);
     cudaDeviceSynchronize();
 
-    cudaError_t err = cudaGetLastError(); 	    /* Check for error */
-	if (cudaSuccess != err) {
-		fprintf(stderr, "Kernel execution failed: %s\n", cudaGetErrorString(err));
-		exit(EXIT_FAILURE);
-    }
-
     cudaMemcpy(gpu_result, mDevice, num_elements * sizeof(float), cudaMemcpyDeviceToHost);
-
-    #ifdef DEBUG	 
-    print_matrix(gpu_result, num_cols, num_rows);
-    #endif
 
     cudaFree(rDevice);
     cudaFree(mDevice);
     cudaFree(kDevice);
-
 
     return;
 }
@@ -126,7 +115,10 @@ int main(int argc, char **argv)
     printf("\nConvolving matrix on the GPU\n");
     compute_on_device(gpu_result, matrix_c, gaussian_kernel, num_cols,\
                        num_rows, HALF_WIDTH);
-       
+    
+    #ifdef DEBUG	 
+        print_matrix(gpu_result, num_cols, num_rows);
+    #endif
     printf("\nComparing CPU and GPU results\n");
     float sum_delta = 0, sum_ref = 0;
     for (i = 0; i < num_elements; i++) {
