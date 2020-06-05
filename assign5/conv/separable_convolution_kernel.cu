@@ -67,13 +67,67 @@ __global__ void convolve_columns_kernel_naive(float *result, float *input, float
     return;
 }
 
-__global__ void convolve_rows_kernel_optimized()
+__global__ void convolve_rows_kernel_optimized(float *result, float *input, int num_cols, int num_rows, int half_width)
 {
+    int i, i1;
+    int j, j1, j2;
+    int x, y;
+
+    x = blockDim.x * blockIdx.x + threadIdx.x;
+    y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    j1 = x - half_width;
+    j2 = x + half_width;
+
+    /* Clamp at the edges of the matrix */
+    if (j1 < 0) 
+        j1 = 0;
+    if (j2 >= num_cols) 
+        j2 = num_cols - 1;
+
+    /* Obtain relative position of starting element from element being convolved */
+    i1 = j1 - x;
+
+    j1 = j1 - x + half_width; /* Obtain operating width of the kernel */
+    j2 = j2 - x + half_width;
+
+    /* Convolve along row */
+    result[y * num_cols + x] = 0.0f;
+    for(i = i1, j = j1; j <= j2; j++, i++)
+        result[y * num_cols + x] += kernel_c[j] * input[y * num_cols + x + i];
+
     return;
 }
 
-__global__ void convolve_columns_kernel_optimized()
+__global__ void convolve_columns_kernel_optimized(float *result, float *input, int num_cols, int num_rows, int half_width)
 {
+    int i, i1;
+    int j, j1, j2;
+    int x, y;
+
+    x = blockDim.x * blockIdx.x + threadIdx.x;
+    y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    j1 = x - half_width;
+    j2 = x + half_width;
+
+    /* Clamp at the edges of the matrix */
+    if (j1 < 0) 
+        j1 = 0;
+    if (j2 >= num_cols) 
+        j2 = num_cols - 1;
+
+    /* Obtain relative position of starting element from element being convolved */
+    i1 = j1 - x;
+
+    j1 = j1 - x + half_width; /* Obtain operating width of the kernel */
+    j2 = j2 - x + half_width;
+
+    /* Convolve along row */
+    result[y * num_cols + x] = 0.0f;
+    for(i = i1, j = j1; j <= j2; j++, i++)
+        result[y * num_cols + x] += kernel_c[j] * input[y * num_cols + x + i];
+
     return;
 }
 
