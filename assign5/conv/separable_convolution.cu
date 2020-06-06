@@ -180,6 +180,7 @@ int main(int argc, char **argv)
     free(matrix_a);
     free(matrix_c);
     free(gpu_result);
+    free(gpu_result_opt);
     free(gaussian_kernel);
 
     exit(EXIT_SUCCESS);
