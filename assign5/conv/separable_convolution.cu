@@ -20,6 +20,8 @@ void print_matrix(float *, int, int);
 #define HALF_WIDTH 8
 #define COEFF 10
 
+#define THREAD_BLOCK_SIZE 32
+
 __constant__ float kernel_c[HALF_WIDTH * 2 + 1]; /* Allocation for the kernel in GPU constant memory */
 
 /* Uncomment line below to spit out debug information */
@@ -36,7 +38,6 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
     struct timeval start, stop;
     int width = 2 * half_width + 1;
     int num_elements = num_rows * num_cols;
-    int thread_block_size = 32;
 
     float *rDevice = NULL; /* result on device */
     float *mDevice = NULL; /* matrix on device */
@@ -52,14 +53,13 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
     cudaMemcpy(mDevice_opt, matrix_c, num_elements * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(kDevice, kernel, width * sizeof(float), cudaMemcpyHostToDevice);
 
-    dim3 threads(thread_block_size, thread_block_size);
-    dim3 grid(num_cols / thread_block_size, num_rows / thread_block_size);
+    dim3 threads(THREAD_BLOCK_SIZE, THREAD_BLOCK_SIZE);
+    dim3 grid(num_cols / THREAD_BLOCK_SIZE, num_rows / THREAD_BLOCK_SIZE);
 
     gettimeofday (&start, NULL);
     convolve_rows_kernel_naive<<< grid, threads >>>(rDevice, mDevice, kDevice, num_cols, num_rows, half_width);
     cudaDeviceSynchronize();
     convolve_columns_kernel_naive<<< grid, threads >>>(mDevice, rDevice, kDevice, num_cols, num_rows, half_width);
-    cudaDeviceSynchronize();
     gettimeofday (&stop, NULL);
     printf ("CUDA Naive Execution Time = %fs\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
 
@@ -68,11 +68,9 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
     gettimeofday (&start, NULL);
     /* We copy the mask to GPU constant memory to improve performance */
     cudaMemcpyToSymbol(kernel_c, kernel, width * sizeof(float));
-    
     convolve_rows_kernel_optimized<<< grid, threads >>>(rDevice, mDevice_opt, num_cols, num_rows, half_width);
     cudaDeviceSynchronize();
     convolve_columns_kernel_optimized<<< grid, threads >>>(mDevice_opt, rDevice, num_cols, num_rows, half_width);
-    cudaDeviceSynchronize();
     gettimeofday (&stop, NULL);
     printf ("CUDA Optimized Execution Time = %fs\n", (float) (stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float) 1000000));
 
@@ -80,6 +78,7 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
 
     cudaFree(rDevice);
     cudaFree(mDevice);
+    cudaFree(mDevice_opt);
     cudaFree(kDevice);
 
     return;
@@ -146,6 +145,8 @@ int main(int argc, char **argv)
     
     #ifdef DEBUG	 
         print_matrix(gpu_result, num_cols, num_rows);
+        printf("\n");
+        print_matrix(gpu_result_opt, num_cols, num_rows);
     #endif
     printf("\nComparing CPU and GPU results (Naive)\n");
     float sum_delta = 0, sum_ref = 0;
