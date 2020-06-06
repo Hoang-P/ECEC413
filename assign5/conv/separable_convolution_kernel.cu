@@ -83,26 +83,26 @@ __global__ void convolve_rows_kernel_optimized(float *result, float *input, int 
     int left_halo_index = (blockIdx.x - 1) * blockDim.x + threadIdx.x;
     if (threadIdx.x >= (blockDim.x - half_width)) {
         if (left_halo_index < 0)
-            input_ts[(threadIdx.x - (blockDim.x - half_width)) + threadIdx.y * blockDim.y] = 0.0;
+            input_ts[threadIdx.y * blockDim.y + (threadIdx.x - (blockDim.x - half_width))] = 0.0;
         else
-            input_ts[(threadIdx.x - (blockDim.x - half_width)) + threadIdx.y * blockDim.y] = input[left_halo_index + y * num_rows];
+            input_ts[threadIdx.y * blockDim.y + (threadIdx.x - (blockDim.x - half_width))] = input[left_halo_index + y * num_rows];
     }
 
     /* Load the center elements for the tile */
-    if (x < num_rows)
-        input_ts[half_width + threadIdx.x + threadIdx.y * blockDim.y] = input[y * num_rows + x];
+    if (x < num_cols)
+        input_ts[threadIdx.y * blockDim.y + (threadIdx.x + half_width)] = input[y * num_rows + x];
     else
-        input_ts[half_width + threadIdx.x + threadIdx.y * blockDim.y] = 0.0;
+        input_ts[threadIdx.y * blockDim.y + (threadIdx.x + half_width)] = 0.0;
 
     /* Load the right halo elements from the next tile.
      * The number of halo elements will again be half_width.
      */
     int right_halo_index = (blockIdx.x + 1) * blockDim.x + threadIdx.x;
     if (threadIdx.x < half_width) {
-        if (right_halo_index >= num_rows)
-            input_ts[threadIdx.x + (blockDim.x + half_width) + threadIdx.y * blockDim.y] = 0.0;
+        if (right_halo_index >= num_cols)
+            input_ts[threadIdx.y * blockDim.y + threadIdx.x + (blockDim.x + half_width)] = 0.0;
         else
-            input_ts[threadIdx.x + (blockDim.x + half_width) + threadIdx.y * blockDim.y] = input[right_halo_index + y * num_rows];
+            input_ts[threadIdx.y * blockDim.y + threadIdx.x + (blockDim.x + half_width)] = input[right_halo_index + y * num_rows];
     }
 
     __syncthreads();
@@ -152,7 +152,7 @@ __global__ void convolve_columns_kernel_optimized(float *result, float *input, i
     }
 
     /* Load the center elements for the tile */
-    if (y < num_cols)
+    if (y < num_rows)
         input_ts[(threadIdx.y + half_width) * blockDim.y + threadIdx.x] = input[y * num_rows + x];
     else
         input_ts[(threadIdx.y + half_width) * blockDim.y + threadIdx.x] = 0.0;
@@ -162,7 +162,7 @@ __global__ void convolve_columns_kernel_optimized(float *result, float *input, i
      */
     int right_halo_index = (blockIdx.y + 1) * blockDim.y + threadIdx.y;
     if (threadIdx.y < half_width) {
-        if (right_halo_index >= num_cols)
+        if (right_halo_index >= num_rows)
             input_ts[(threadIdx.y + (blockDim.y + half_width)) * blockDim.y + threadIdx.x] = 0.0;
         else
             input_ts[(threadIdx.y + (blockDim.y + half_width)) * blockDim.y + threadIdx.x] = input[right_halo_index * num_rows + x];

@@ -20,6 +20,7 @@ void print_matrix(float *, int, int);
 #define HALF_WIDTH 8
 #define COEFF 10
 
+/* Size of thread blocks */
 #define THREAD_BLOCK_SIZE 32
 
 __constant__ float kernel_c[HALF_WIDTH * 2 + 1]; /* Allocation for the kernel in GPU constant memory */
@@ -44,11 +45,13 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
     float *mDevice_opt = NULL; /* matrix on device */
     float *kDevice = NULL; /* kernel on device */
 
+    /* Memory allocation for GPU */
     cudaMalloc((void **)&rDevice, num_elements * sizeof(float));
     cudaMalloc((void **)&mDevice, num_elements * sizeof(float));
     cudaMalloc((void **)&mDevice_opt, num_elements * sizeof(float));
     cudaMalloc((void **)&kDevice, width * sizeof(float));
 
+    /* Copy over matrices */
     cudaMemcpy(mDevice, matrix_c, num_elements * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(mDevice_opt, matrix_c, num_elements * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(kDevice, kernel, width * sizeof(float), cudaMemcpyHostToDevice);
@@ -56,6 +59,7 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
     dim3 threads(THREAD_BLOCK_SIZE, THREAD_BLOCK_SIZE);
     dim3 grid(num_cols / THREAD_BLOCK_SIZE, num_rows / THREAD_BLOCK_SIZE);
 
+    /* Naive implementation */
     gettimeofday (&start, NULL);
     convolve_rows_kernel_naive<<< grid, threads >>>(rDevice, mDevice, kDevice, num_cols, num_rows, half_width);
     cudaDeviceSynchronize();
@@ -65,6 +69,7 @@ void compute_on_device(float *gpu_result,float *gpu_result_opt, float *matrix_c,
 
     cudaMemcpy(gpu_result, mDevice, num_elements * sizeof(float), cudaMemcpyDeviceToHost);
 
+    /* Optimized implementation */
     gettimeofday (&start, NULL);
     /* We copy the mask to GPU constant memory to improve performance */
     cudaMemcpyToSymbol(kernel_c, kernel, width * sizeof(float));
